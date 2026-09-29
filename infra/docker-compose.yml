@@ -1,0 +1,33 @@
+# Запуск всего бэкенда одной командой (из корня репозитория):
+#   docker compose -f infra/docker-compose.yml up --build
+# Swagger: http://localhost:8000/docs
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: barakholka
+      POSTGRES_PASSWORD: barakholka
+      POSTGRES_DB: barakholka
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U barakholka"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ../backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://barakholka:barakholka@db:5432/barakholka
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
