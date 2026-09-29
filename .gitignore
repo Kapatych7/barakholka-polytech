@@ -1,0 +1,31 @@
+# --- общее ---
+.DS_Store
+.idea/
+.vscode/
+*.log
+.env
+!.env.example
+
+# --- backend (Python) ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- mobile (Android) ---
+*.iml
+.gradle/
+local.properties
+mobile/build/
+mobile/app/build/
+mobile/captures/
+mobile/.externalNativeBuild/
+mobile/.cxx/
+*.apk
+*.aab
+*.keystore
+*.jks
