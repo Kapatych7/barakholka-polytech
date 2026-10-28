@@ -64,17 +64,35 @@ pytest
 ruff check . && ruff format --check .
 ```
 
-## Что уже есть в API (v0.1)
+## Что уже есть в API (v0.2)
+
+Все пути — с префиксом `/api/v1`, всё кроме регистрации и входа требует заголовок `Authorization: Bearer <токен>`.
+Форматы ответов и коды ошибок — строго по контракту API (issue #3, `Rest_api_mvp.docx`).
 
 | Метод | Путь | Описание |
 |---|---|---|
-| GET | `/api/v1/health` | Проверка работы сервера и БД |
-| POST | `/api/v1/auth/register` | Регистрация по email и паролю |
-| POST | `/api/v1/auth/login` | Вход, возвращает JWT |
-| GET | `/api/v1/auth/me` | Текущий пользователь (нужен токен) |
-| GET | `/api/v1/categories` | Список категорий |
+| POST | `/auth/register` | Регистрация, сразу возвращает токен |
+| POST | `/auth/login` | Вход, возвращает токен |
+| GET | `/users/me` | Мой профиль |
+| GET | `/users/me/ads` | Мои объявления (все статусы, фильтр `status`) |
+| GET | `/categories` | Категории |
+| GET | `/locations` | Места встречи (общежития и корпуса) |
+| GET | `/ads` | Лента: фильтры `category_id`, `location_id`, `min_price`, `max_price`, `q`, сортировка `sort`, пагинация `limit`/`offset` |
+| POST | `/ads` | Создание объявления |
+| GET | `/ads/{id}` | Карточка объявления |
+| PATCH | `/ads/{id}` | Редактирование (только переданные поля) |
+| POST | `/ads/{id}/close` | Закрыть (active → closed) |
+| POST | `/ads/{id}/reopen` | Открыть снова (closed → active) |
+| POST | `/ads/{id}/archive` | В архив (active/closed → archived) |
+| GET | `/health` | Проверка работы сервера и БД |
 
-Все таблицы из утверждённой структуры БД уже созданы миграцией `0001`.
+Ошибки всегда приходят в одном формате:
+
+```json
+{"error": {"code": "AD_NOT_FOUND", "message": "Объявление не найдено", "details": {}}}
+```
+
+Схема БД соответствует обновлённому документу «Структура БД» (issue #2): миграции `0001` и `0002`.
 
 ## Как мы работаем с Git
 

@@ -1,30 +1,35 @@
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.core.errors import AppError
 from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models import User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
+# auto_error=False — сами возвращаем 401 в едином формате ошибок
+bearer_scheme = HTTPBearer(auto_error=False, description="JWT из /auth/login или /auth/register")
 
 DbSession = Annotated[Session, Depends(get_db)]
 
 
-def get_current_user(db: DbSession, token: Annotated[str, Depends(oauth2_scheme)]) -> User:
-    unauthorized = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Не удалось проверить токен",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    user_id = decode_access_token(token)
+def get_current_user(
+    db: DbSession,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+) -> User:
+    unauthorized = AppError(401, "UNAUTHORIZED", "Пользователь не авторизован или токен недействителен")
+    if credentials is None:
+        raise unauthorized
+    user_id = decode_access_token(credentials.credentials)
     if user_id is None:
         raise unauthorized
     user = db.get(User, user_id)
-    if user is None or not user.is_active:
+    if user is None:
         raise unauthorized
+    if not user.is_active:
+        raise AppError(403, "ACCOUNT_BLOCKED", "Аккаунт заблокирован")
     return user
 
 

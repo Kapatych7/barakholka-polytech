@@ -1,29 +1,25 @@
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import APIRouter, status
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import DbSession
+from app.core.errors import AppError
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models import User
-from app.schemas import Token, UserCreate, UserLogin, UserOut
+from app.schemas import AuthResponse, UserCreate, UserLogin, UserShort
 
-router = APIRouter(prefix="/auth", tags=["auth"])
-
-
-def _authenticate(db: DbSession, email: str, password: str) -> User:
-    user = db.scalar(select(User).where(User.email == email.lower()))
-    if user is None or not user.is_active or not verify_password(password, user.password_hash):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный email или пароль")
-    return user
+router = APIRouter(prefix="/auth", tags=["Авторизация"])
 
 
-@router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def register(data: UserCreate, db: DbSession) -> User:
+def _auth_response(user: User) -> AuthResponse:
+    return AuthResponse(user=UserShort.model_validate(user), access_token=create_access_token(user.id))
+
+
+@router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+def register(data: UserCreate, db: DbSession) -> AuthResponse:
+    """Регистрация (3.1.1). Сразу возвращает токен; роль всегда user."""
     email = data.email.lower()
-    if db.scalar(select(User).where(User.email == email)):
-        raise HTTPException(status.HTTP_409_CONFLICT, "Пользователь с таким email уже существует")
+    if db.scalar(select(User.id).where(User.email == email)):
+        raise AppError(409, "EMAIL_ALREADY_EXISTS", "Почта уже зарегистрирована")
     user = User(
         email=email,
         password_hash=hash_password(data.password),
@@ -33,23 +29,15 @@ def register(data: UserCreate, db: DbSession) -> User:
     db.add(user)
     db.commit()
     db.refresh(user)
-    return user
+    return _auth_response(user)
 
 
-@router.post("/login", response_model=Token)
-def login(data: UserLogin, db: DbSession) -> Token:
-    """Вход для мобильного клиента (JSON)."""
-    user = _authenticate(db, data.email, data.password)
-    return Token(access_token=create_access_token(user.id))
-
-
-@router.post("/token", response_model=Token, include_in_schema=False)
-def token(form: Annotated[OAuth2PasswordRequestForm, Depends()], db: DbSession) -> Token:
-    """Вход через форму — нужен для кнопки Authorize в Swagger UI."""
-    user = _authenticate(db, form.username, form.password)
-    return Token(access_token=create_access_token(user.id))
-
-
-@router.get("/me", response_model=UserOut)
-def me(user: CurrentUser) -> User:
-    return user
+@router.post("/login", response_model=AuthResponse)
+def login(data: UserLogin, db: DbSession) -> AuthResponse:
+    """Вход по email и паролю (3.1.2)."""
+    user = db.scalar(select(User).where(User.email == data.email.lower()))
+    if user is None or not verify_password(data.password, user.password_hash):
+        raise AppError(401, "INVALID_CREDENTIALS", "Неверный email или пароль")
+    if not user.is_active:
+        raise AppError(403, "ACCOUNT_BLOCKED", "Аккаунт заблокирован")
+    return _auth_response(user)

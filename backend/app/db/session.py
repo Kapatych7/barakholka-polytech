@@ -5,7 +5,12 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
 
-engine = create_engine(settings.database_url, pool_pre_ping=True)
+# Все даты храним и отдаём в UTC (контракт API, раздел 2.5)
+engine = create_engine(
+    settings.database_url,
+    pool_pre_ping=True,
+    connect_args={"options": "-c timezone=UTC"},
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
